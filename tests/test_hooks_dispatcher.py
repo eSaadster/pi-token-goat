@@ -1282,6 +1282,7 @@ def test_dispatch_watchdog_returns_within_budget_on_hung_handler(monkeypatch):
     import time as _time
 
     monkeypatch.setattr(hooks_cli, "_HOOK_WATCHDOG_MS", 100)
+    monkeypatch.setenv("TOKEN_GOAT_HOOK_WATCHDOG_MS", "100")
     budget_s = hooks_cli._HOOK_WATCHDOG_MS / 1000.0
     sleep_s = budget_s * 5
 
@@ -1313,6 +1314,7 @@ def test_dispatch_watchdog_does_not_trip_on_fast_handler(monkeypatch):
         return {"continue": True, "_marker": "fast-ok"}
 
     monkeypatch.setattr(hooks_cli, "_HOOK_WATCHDOG_MS", 5000)
+    monkeypatch.setenv("TOKEN_GOAT_HOOK_WATCHDOG_MS", "5000")
     monkeypatch.setitem(hooks_cli.EVENTS, "session-start", fast_handler)
 
     result = hooks_cli.dispatch("session-start", {"session_id": "watchdog-fast"})
@@ -1326,6 +1328,7 @@ def test_dispatch_watchdog_logs_warning_on_trip(monkeypatch, caplog):
     import logging as _logging
 
     monkeypatch.setattr(hooks_cli, "_HOOK_WATCHDOG_MS", 50)
+    monkeypatch.setenv("TOKEN_GOAT_HOOK_WATCHDOG_MS", "50")
 
     def hung(_payload):
         threading.Event().wait(0.5)
@@ -1351,18 +1354,39 @@ def test_dispatch_watchdog_logs_warning_on_trip(monkeypatch, caplog):
 # ---------------------------------------------------------------------------
 
 
-def test_resolved_watchdog_ms_unset_returns_default(monkeypatch):
-    """No env var → fall back to the compiled default constant."""
+def test_resolved_watchdog_ms_unset_uses_config_layer(monkeypatch, tmp_data_dir):
+    """No env var → Layer 2: reads per-project config value before falling back to constant."""
     monkeypatch.delenv("TOKEN_GOAT_HOOK_WATCHDOG_MS", raising=False)
-    monkeypatch.setattr(hooks_cli, "_HOOK_WATCHDOG_MS", 1234)
-    assert hooks_cli._resolved_watchdog_ms() == 1234
+    from unittest.mock import MagicMock
+
+    import token_goat.config as _cfg_mod
+    mock_cfg = MagicMock()
+    mock_cfg.hooks.watchdog_ms = 3500
+    monkeypatch.setattr(_cfg_mod, "load", lambda: mock_cfg)
+    assert hooks_cli._resolved_watchdog_ms() == 3500
 
 
-def test_resolved_watchdog_ms_blank_returns_default(monkeypatch):
-    """Blank/whitespace-only env value is treated as unset (fail-soft on typos)."""
+def test_resolved_watchdog_ms_blank_uses_config_layer(monkeypatch, tmp_data_dir):
+    """Blank/whitespace env value is treated as unset; config layer still applies."""
     monkeypatch.setenv("TOKEN_GOAT_HOOK_WATCHDOG_MS", "   ")
-    monkeypatch.setattr(hooks_cli, "_HOOK_WATCHDOG_MS", 2222)
-    assert hooks_cli._resolved_watchdog_ms() == 2222
+    from unittest.mock import MagicMock
+
+    import token_goat.config as _cfg_mod
+    mock_cfg = MagicMock()
+    mock_cfg.hooks.watchdog_ms = 4200
+    monkeypatch.setattr(_cfg_mod, "load", lambda: mock_cfg)
+    assert hooks_cli._resolved_watchdog_ms() == 4200
+
+
+def test_resolved_watchdog_ms_config_failure_falls_back_to_constant(monkeypatch):
+    """When config.load() raises, the hardcoded constant is the terminal fallback."""
+    monkeypatch.delenv("TOKEN_GOAT_HOOK_WATCHDOG_MS", raising=False)
+    monkeypatch.setattr(hooks_cli, "_HOOK_WATCHDOG_MS", 7777)
+    import token_goat.config as _cfg_mod
+    def _raise():
+        raise RuntimeError("simulated config failure")
+    monkeypatch.setattr(_cfg_mod, "load", _raise)
+    assert hooks_cli._resolved_watchdog_ms() == 7777
 
 
 def test_resolved_watchdog_ms_valid_in_band(monkeypatch):
@@ -1568,10 +1592,10 @@ def test_get_hook_context_remaining_ms_inside_hook():
         result = hc.dispatch("session-start", {"session_id": "budget-test"})
         assert result["continue"] is True
         assert len(remaining_values) == 1
-        # The remaining budget should be less than the max (2000 ms) but positive.
-        # Since the handler runs very fast, the remaining should be close to 2000 ms.
+        # The remaining budget should be close to the configured budget (handler runs very fast).
+        budget = hc._resolved_watchdog_ms()
         remaining = remaining_values[0]
-        assert 1900 <= remaining <= 2000, f"expected remaining ~2000ms, got {remaining}ms"
+        assert (budget - 100) <= remaining <= budget, f"expected remaining ~{budget}ms, got {remaining}ms"
     finally:
         if original_handler:
             hc.EVENTS["session-start"] = original_handler

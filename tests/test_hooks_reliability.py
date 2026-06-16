@@ -204,6 +204,12 @@ class TestWatchdogMetadata:
 
         budget_ms = 80
         monkeypatch.setattr(_cli, "_HOOK_WATCHDOG_MS", budget_ms)
+        from unittest.mock import MagicMock
+
+        import token_goat.config as _cfg_mod
+        _mock_cfg = MagicMock()
+        _mock_cfg.hooks.watchdog_ms = budget_ms
+        monkeypatch.setattr(_cfg_mod, "load", lambda: _mock_cfg)
 
         # Install a handler that blocks longer than the budget.
         def _hang(payload):
@@ -224,6 +230,12 @@ class TestWatchdogMetadata:
         import token_goat.hooks_cli as _cli
 
         monkeypatch.setattr(_cli, "_HOOK_WATCHDOG_MS", 60)
+        from unittest.mock import MagicMock
+
+        import token_goat.config as _cfg_mod
+        _mock_cfg = MagicMock()
+        _mock_cfg.hooks.watchdog_ms = 60
+        monkeypatch.setattr(_cfg_mod, "load", lambda: _mock_cfg)
 
         def _hang(payload):
             threading.Event().wait(5)
@@ -240,6 +252,12 @@ class TestWatchdogMetadata:
 
         budget_ms = 80
         monkeypatch.setattr(_cli, "_HOOK_WATCHDOG_MS", budget_ms)
+        from unittest.mock import MagicMock
+
+        import token_goat.config as _cfg_mod
+        _mock_cfg = MagicMock()
+        _mock_cfg.hooks.watchdog_ms = budget_ms
+        monkeypatch.setattr(_cfg_mod, "load", lambda: _mock_cfg)
 
         def _hang(payload):
             threading.Event().wait(10)

@@ -378,18 +378,26 @@ _ENV_HOOK_WATCHDOG_MS: Final[str] = "TOKEN_GOAT_HOOK_WATCHDOG_MS"
 def _resolved_watchdog_ms() -> int:
     """Return the effective watchdog budget in milliseconds.
 
-    Reads :data:`_ENV_HOOK_WATCHDOG_MS` and clamps to
-    ``[_HOOK_WATCHDOG_MS_FLOOR, _HOOK_WATCHDOG_MS_CEIL]``.  Any parse failure
-    (non-numeric, negative, blank) falls back to :data:`_HOOK_WATCHDOG_MS`.
+    Three-layer resolution:
+      1. Env var :data:`_ENV_HOOK_WATCHDOG_MS`, clamped to
+         ``[_HOOK_WATCHDOG_MS_FLOOR, _HOOK_WATCHDOG_MS_CEIL]``.
+      2. Per-project config value from ``config.load().hooks.watchdog_ms``
+         (has a process-level mtime cache — costs one ``os.stat`` per call).
+      3. Compile-time constant :data:`_HOOK_WATCHDOG_MS` — terminal fallback
+         when ``config.load()`` raises.
 
-    Reading the env per dispatch costs ~1 µs and means an operator can re-tune
-    the budget mid-session by editing the agent's settings.json — no restart
-    needed.  Tests still monkeypatch ``_HOOK_WATCHDOG_MS`` directly, which
-    continues to work because that constant is the fallback.
+    Any parse failure on Layer 1 (non-numeric, negative) also falls back to
+    :data:`_HOOK_WATCHDOG_MS` directly (skipping Layer 2) since bad env values
+    indicate a misconfiguration, not an absent config file.
     """
     raw = os.environ.get(_ENV_HOOK_WATCHDOG_MS, "").strip()
     if not raw:
-        return _HOOK_WATCHDOG_MS
+        # Layer 2: per-project config baseline before the compile-time constant.
+        try:
+            from .config import load as _load_cfg  # noqa: PLC0415
+            return _load_cfg().hooks.watchdog_ms
+        except Exception:  # noqa: BLE001
+            return _HOOK_WATCHDOG_MS
     try:
         parsed = int(raw)
     except (TypeError, ValueError):

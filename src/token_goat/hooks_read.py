@@ -1224,6 +1224,24 @@ def _handle_doc_compact(
         return deny_redirect("doc-compact: serving compact instead of full file", content)
 
     # Section-map hint or stale warning: let the read proceed, inject hint.
+    # Fire-and-forget compact-doc so the sidecar is ready on the next read.
+    _fp_key = f"compact_doc_spawned:{file_path}"
+    if cache is not None:
+        try:
+            if not cache.has_hint_fingerprint(_fp_key):  # type: ignore[attr-defined]
+                cache.mark_hint_seen(_fp_key)  # type: ignore[attr-defined]
+                import shutil as _shutil  # noqa: PLC0415
+                import subprocess as _subprocess  # noqa: PLC0415
+                _exe = _shutil.which("token-goat")
+                if _exe:
+                    _subprocess.Popen(
+                        [_exe, "compact-doc", file_path],
+                        stdin=_subprocess.DEVNULL,
+                        stdout=_subprocess.DEVNULL,
+                        stderr=_subprocess.DEVNULL,
+                    )
+        except Exception:  # noqa: BLE001
+            pass
     return pre_tool_use_with_context(hint_text)
 
 
@@ -3599,11 +3617,38 @@ def _handle_reread_deny(
     prior = _format_read_ranges(entry.line_ranges)
     window_str = f"lines {req_start}–{req_end}" if req_end is not None else f"lines {req_start}+"
     reason = f"{name} {window_str} already in context this session — re-read is redundant."
+    # Build the symbol-read hint line using real indexed symbols when available.
+    _symbol_read_line = f'  `token-goat read "{file_path}::SymbolName"` — extract one symbol'
+    try:
+        from . import db as _db  # noqa: PLC0415
+        from . import read_replacement as _rr  # noqa: PLC0415
+        from .project import find_project  # noqa: PLC0415
+
+        _proj = find_project(Path(file_path).parent)
+        if _proj is not None:
+            _file_rel = _rr.resolve_file_rel(_proj, file_path)
+            if _file_rel:
+                with _db.open_project_readonly(_proj.hash) as _conn:
+                    _sym_rows = _conn.execute(
+                        "SELECT name FROM symbols "
+                        "WHERE file_rel = ? AND kind NOT IN ('import', 'variable') "
+                        "ORDER BY line LIMIT 8",
+                        (_file_rel,),
+                    ).fetchall()
+                if _sym_rows:
+                    _names = [r["name"] for r in _sym_rows]
+                    _rest = "".join(f", `::{_n}`" for _n in _names[1:])
+                    _symbol_read_line = (
+                        f'  `token-goat read "{_file_rel}::{_names[0]}"`{_rest}'
+                        f" — extract one symbol"
+                    )
+    except Exception:  # noqa: BLE001
+        pass
     context = (
         f"`{name}` {window_str} is already in context (prior reads this session: {prior}). "
         f"The file is unchanged. Use what is already in context, or read only the new lines:\n"
         f"  `token-goat symbol <NAME>` — jump to a definition\n"
-        f'  `token-goat read "{file_path}::SymbolName"` — extract one symbol\n'
+        f"{_symbol_read_line}\n"
         f"  Re-issue this Read with `offset`/`limit` set to just the lines you need.\n"
         f"(A second identical request passes through automatically if you genuinely need it.)"
     )
