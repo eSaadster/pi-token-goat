@@ -8647,6 +8647,19 @@ _TF_KNOWN_AFTER_APPLY_RE: Final[re.Pattern[str]] = re.compile(
 _TF_PLAN_ATTR_DIFF_RE: Final[re.Pattern[str]] = re.compile(
     r"^\s+[~+\-]\s+\S"
 )
+# terraform init provider noise: "- Finding hashicorp/aws versions...", "- Installing...", "- Installed..."
+_TF_INIT_PROVIDER_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\s*-\s+(?:Finding|Installing|Installed|Downloading|Locking)\s+\S+",
+    re.IGNORECASE,
+)
+# terraform show/state resource block header: "# aws_instance.web:" or "# module.vpc.aws_vpc.main:"
+_TF_SHOW_RESOURCE_HDR_RE: Final[re.Pattern[str]] = re.compile(
+    r"^# (?:(?:module\.\S+\.)?[a-z][a-z0-9_]+\.[a-zA-Z0-9_.\[\]-]+):$"
+)
+# terraform show: high-signal attribute names worth keeping per resource block
+_TF_SHOW_KEY_ATTR_RE: Final[re.Pattern[str]] = re.compile(
+    r'^\s+(?:id|arn|name|region|account_id|bucket|type|instance_type|endpoint|address|hostname|dns_name|tags(?:_all)?)\s*='
+)
 
 
 class TerraformFilter(Filter):
@@ -8685,21 +8698,12 @@ class TerraformFilter(Filter):
         elif subcommand == "apply":
             text = self._compress_terraform_apply(text, stderr)
         elif subcommand == "init":
-            if "\n" in text:
-                non_empty = [ln for ln in text.split("\n") if ln.strip()]
-                if len(non_empty) > 10:
-                    text = _head_tail_compress(non_empty, head=5, tail=5, label="init lines")
-                else:
-                    text = "\n".join(non_empty)
+            text = self._compress_terraform_init(text)
         elif subcommand in ("validate", "validate-config"):
             # Pass through; validate output is typically brief.
             pass
         elif subcommand in ("show", "state"):
-            non_empty = [ln for ln in text.split("\n") if ln.strip()]
-            if len(non_empty) > 30:
-                text = _head_tail_compress(non_empty, head=20, tail=10, label="lines")
-            else:
-                text = "\n".join(non_empty)
+            text = self._compress_terraform_show(text)
         elif subcommand in ("output", "outputs"):
             # ``terraform output`` / ``terraform outputs`` emit key = value pairs.
             # Usually short; pass through.
@@ -8752,10 +8756,16 @@ class TerraformFilter(Filter):
                 i += 1
                 continue
 
-            # Detect "# resource will not be changed" / "No changes." blocks.
+            # Detect "# resource will not be changed" / data-source read blocks.
             if (
                 line.startswith("# ")
-                and ("will not be" in line or "is up-to-date" in line or "not be created" in line)
+                and (
+                    "will not be" in line
+                    or "is up-to-date" in line
+                    or "not be created" in line
+                    or "will be read during apply" in line
+                    or "is a data resource" in line
+                )
             ):
                 # Skip this comment block.
                 i += 1
@@ -8848,7 +8858,7 @@ class TerraformFilter(Filter):
 
         notes: list[str] = []
         _maybe_note(notes, dropped_refresh, f"dropped {dropped_refresh} terraform refresh/read lines")
-        _maybe_note(notes, dropped_no_change_blocks, f"collapsed {dropped_no_change_blocks} unchanged-resource block(s)")
+        _maybe_note(notes, dropped_no_change_blocks, f"collapsed {dropped_no_change_blocks} unchanged/read-only block(s)")
         _maybe_note(notes, dropped_kaa, f"collapsed {dropped_kaa} (known after apply) attribute lines")
         self._emit_notes(kept, notes)
         return self._finalize(kept)
@@ -8905,6 +8915,74 @@ class TerraformFilter(Filter):
         notes: list[str] = []
         _maybe_note(notes, dropped_refresh, f"dropped {dropped_refresh} terraform refresh/read lines")
         _maybe_note(notes, still_dropped, f"collapsed {still_dropped} Still creating/modifying line(s)")
+        self._emit_notes(kept, notes)
+        return self._finalize(kept)
+
+    def _compress_terraform_init(self, stdout: str) -> str:
+        """Compress terraform init: collapse provider download/install noise, keep key messages."""
+        lines = stdout.split("\n")
+        kept: list[str] = []
+        provider_collapsed = 0
+        for line in lines:
+            if _TF_INIT_PROVIDER_RE.match(line):
+                provider_collapsed += 1
+                continue
+            kept.append(line)
+        # Strip trailing blank lines.
+        while kept and not kept[-1].strip():
+            kept.pop()
+        notes: list[str] = []
+        _maybe_note(notes, provider_collapsed, f"collapsed {provider_collapsed} provider install/find lines")
+        self._emit_notes(kept, notes)
+        return self._finalize(kept)
+
+    def _compress_terraform_show(self, stdout: str) -> str:
+        """Compress terraform show/state: keep high-signal attributes per resource block, collapse rest."""
+        lines = stdout.split("\n")
+        kept: list[str] = []
+        collapsed_total = 0
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if _TF_SHOW_RESOURCE_HDR_RE.match(line):
+                kept.append(line)
+                i += 1
+                block_collapsed = 0
+                while i < len(lines):
+                    body = lines[i]
+                    # Blank line signals end of this resource block.
+                    if not body.strip():
+                        kept.append(body)
+                        i += 1
+                        break
+                    # Next resource header ends this block.
+                    if _TF_SHOW_RESOURCE_HDR_RE.match(body):
+                        break
+                    # Keep block opener/closer lines.
+                    if re.match(r'^(?:resource|data)\s+"', body) or body.strip() in ("}", "{"):
+                        kept.append(body)
+                        i += 1
+                        continue
+                    # Keep high-signal attribute lines.
+                    if _TF_SHOW_KEY_ATTR_RE.match(body):
+                        kept.append(body)
+                        i += 1
+                        continue
+                    block_collapsed += 1
+                    collapsed_total += 1
+                    i += 1
+                if block_collapsed:
+                    kept.append(f"  [token-goat: collapsed {block_collapsed} attribute lines]")
+                continue
+            kept.append(line)
+            i += 1
+        # For short output (no resource headers found) fall back to head/tail.
+        if collapsed_total == 0:
+            non_empty = [ln for ln in kept if ln.strip()]
+            if len(non_empty) > 30:
+                return _head_tail_compress(non_empty, head=20, tail=10, label="lines")
+        notes: list[str] = []
+        _maybe_note(notes, collapsed_total, f"collapsed {collapsed_total} show/state attribute lines across resource blocks")
         self._emit_notes(kept, notes)
         return self._finalize(kept)
 
