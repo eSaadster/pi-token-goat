@@ -4,6 +4,10 @@ All notable changes to Token-Goat are documented in this file. Format follows Ke
 
 ## [Unreleased]
 
+### Added
+
+- **pi (pi-coding-agent) integration via `--pi`.** Adds a TypeScript extension bridge for [pi-coding-agent](https://github.com/earendil-works/pi-mono), following the same pattern as the existing opencode/openclaw bridges. `token-goat install --pi` writes the extension to `~/.pi/agent/extensions/token-goat.ts`; a project-local install (`bridges.install_pi_plugin(target_dir=...)`) writes `<project>/.pi/extensions/token-goat.ts` instead. The extension subscribes to pi's `session_start`, `tool_call`, `tool_result`, `session_before_compact`, and `session_compact` events and forwards them to the existing `token-goat hook <event>` subprocess protocol. So bash compression, re-read denial, image shrinking, surgical-read redirects, post-edit indexing, output caching, and the compaction manifest work inside pi. Compaction differs slightly from opencode: pi replaces the summary rather than appending, so the manifest is captured at `session_before_compact` and re-injected after `session_compact`. Skill-overhead preservation is not included — pi has no Skill tool, since skills are template expansions there. Reverse with `token-goat uninstall --pi`. `pi` is wired into `--target`, `plan_install`, `install_all`, `uninstall_all`, `check_status`, and `detect_installed_harnesses`.
+
 ## [1.9.0] - 2026-06-16
 
 ### Added
