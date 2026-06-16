@@ -9016,8 +9016,14 @@ class TerraformFilter(Filter):
         # Strip trailing blank lines.
         while kept and not kept[-1].strip():
             kept.pop()
+        non_empty = [ln for ln in kept if ln.strip()]
         notes: list[str] = []
         _maybe_note(notes, provider_collapsed, f"collapsed {provider_collapsed} provider install/find lines")
+        if len(non_empty) > 12:
+            compressed = _head_tail_compress(non_empty, head=5, tail=5, label="lines")
+            if notes:
+                compressed = compressed.rstrip() + "\n" + "\n".join(notes)
+            return compressed
         self._emit_notes(kept, notes)
         return self._finalize(kept)
 
