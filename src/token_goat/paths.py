@@ -929,6 +929,40 @@ def claude_session_tool_results_dir(session_id: str) -> Path | None:
     return None
 
 
+def claude_session_project_dir(session_id: str) -> Path | None:
+    """Return the ``~/.claude/projects/<slug>`` directory that owns *session_id*.
+
+    Matches by scanning for a ``<session_id>.jsonl`` transcript file rather than
+    reconstructing Claude Code's path-slug scheme (which token-goat deliberately
+    does not reimplement).  The transcript exists at session start, unlike the
+    ``tool-results`` subdir which may not be created until a hook fires.
+
+    *session_id* undergoes the same path-segment validation as
+    :func:`claude_session_tool_results_dir`.  Returns ``None`` on any validation
+    failure, a missing projects root, or when no project owns the session.
+    Never raises.
+    """
+    if not session_id or "\x00" in session_id:
+        return None
+    if "/" in session_id or "\\" in session_id or session_id in (".", ".."):
+        return None
+    root = claude_projects_dir()
+    try:
+        if not root.is_dir():
+            return None
+        for proj_dir in root.iterdir():
+            try:
+                if not proj_dir.is_dir():
+                    continue
+                if (proj_dir / f"{session_id}.jsonl").is_file():
+                    return proj_dir
+            except OSError:
+                continue
+    except OSError:
+        return None
+    return None
+
+
 def claude_skills_dir() -> Path:
     """Path to Claude Code skills directory (~/.claude/skills)."""
     return claude_config_dir() / "skills"

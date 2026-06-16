@@ -6,15 +6,15 @@ All notable changes to Token-Goat are documented in this file. Format follows Ke
 
 ### Added
 
-- **`TerraformFilter` extended: `terraform show` compression and plan data-source detection.** `terraform show` output now strips noise attributes (id, arn, timeouts, tags blocks) per resource block and appends a suppression note, keeping only high-signal fields. `terraform plan` unchanged-block detection now covers data-source read-during-apply blocks in addition to managed-resource no-op blocks.
+- **`TerraformFilter` extended: `terraform show` compression and plan data-source detection.** `terraform show` output now strips noise attributes (id, arn, timeouts, tags blocks) per resource block and appends a suppression note; only meaningful fields survive. `terraform plan` unchanged-block detection now covers data-source read-during-apply blocks in addition to managed-resource no-op blocks.
 
 - **`KubectlFilter` extended: event grouping and describe compression.** `kubectl events` output groups events by `REASON` with a per-group count and a field-selector hint. `kubectl describe` collapses label and annotation blocks to line counts, preserves the Conditions table in full, and retains container resource (requests/limits) fields.
 
-- **`NpmInstallFilter` extended: warn collapsing and verbose line suppression.** General `npm warn` lines beyond the first 3 are collapsed to a suppression note. Verbose timing, sill, http, and verb lines are suppressed entirely. Braille spinner reify progress lines are stripped.
+- **`NpmInstallFilter` extended: warn collapsing and verbose line suppression.** `npm warn` lines after the first 3 are collapsed to a suppression note. Verbose timing, sill, http, and verb lines are suppressed entirely. Braille spinner reify progress lines are stripped.
 
 ### Fixed
 
-- **`TerraformFilter._compress_terraform_init` head/tail fallback.** When `terraform init` progress lines (e.g., `Installing plugin N`) did not match the provider-specific regex, all lines passed through unchanged. The method now applies head=5/tail=5 compression whenever `len(non_empty) > 12` after provider-line collapsing, matching the class docstring intent.
+- **`TerraformFilter._compress_terraform_init` head/tail fallback.** When `terraform init` progress lines (e.g., `Installing plugin N`) did not match the provider-specific regex, all lines passed through unchanged. The method now applies head=5/tail=5 compression whenever `len(non_empty) > 12` after provider-line collapsing.
 
 ## [1.8.0] - 2026-06-13
 

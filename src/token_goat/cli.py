@@ -6139,6 +6139,35 @@ def doctor(  # noqa: C901
 _VALID_TARGETS = {"claude", "codex", "gemini", "opencode", "openclaw", "all"}
 
 
+@app.command("context-stats", rich_help_panel="Install")
+def context_stats(
+    fix: bool = typer.Option(  # noqa: B008
+        False,
+        "--fix",
+        help="Apply safe structural pruning: remove dead links and exact-duplicate "
+             "entries from the project's MEMORY.md index. Never edits memory bodies "
+             "or CLAUDE.md files.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Machine-readable output."),  # noqa: B008
+    project: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--project",
+        help="Project root to analyse (defaults to CWD).",
+        exists=False,
+    ),
+) -> None:
+    """Show startup context footprint and optionally prune stale MEMORY.md entries.
+
+    Estimates how many tokens are consumed before any real work begins:
+    CLAUDE.md files, MEMORY.md, and known fixed overhead (system prompt,
+    skill/agent listings).  With ``--fix``, safely removes dead links and
+    exact-duplicate index entries from MEMORY.md.
+    """
+    from . import cli_context_stats  # noqa: PLC0415
+
+    cli_context_stats.run(fix=fix, json_out=json_output, project=project)
+
+
 @app.command("install", rich_help_panel="Install")
 def cmd_install(
     codex: bool = typer.Option(False, "--codex", help="Also install Codex CLI integration"),  # noqa: B008

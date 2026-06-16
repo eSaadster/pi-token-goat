@@ -38,6 +38,7 @@ from __future__ import annotations
 
 __all__ = ["session_start"]
 
+import re
 from typing import TYPE_CHECKING, Final
 
 from .hooks_common import (
@@ -59,6 +60,76 @@ if TYPE_CHECKING:
     # five hook events never touch this module's helpers, so defer the import.
     from .project import Project
     from .session import BashEntry
+
+
+# ---------------------------------------------------------------------------
+# Memory-index pruning throttle
+# ---------------------------------------------------------------------------
+
+_MEMORY_PRUNE_THROTTLE_H: Final[float] = 24.0
+
+
+def _prune_memory_index(session_id: str | None, cwd: str | None) -> None:
+    """Best-effort, throttled, never-raises: prune dead + dup entries from MEMORY.md.
+
+    Runs at most once per project per ``_MEMORY_PRUNE_THROTTLE_H`` hours via a
+    sentinel file.  Atomic rewrite via :func:`paths.atomic_write_text`.
+    """
+    import time  # noqa: PLC0415
+
+    try:
+        from . import paths  # noqa: PLC0415
+
+        # Resolve the project slug dir from the session transcript.
+        proj_dir: Path | None = None
+        if session_id:
+            proj_dir = paths.claude_session_project_dir(session_id)
+
+        if proj_dir is None and cwd:
+            # Fallback: scan projects dir for the slug matching cwd.
+            from pathlib import Path  # noqa: PLC0415
+
+            cwd_path = Path(cwd).resolve()
+            slug = re.sub(r"[^A-Za-z0-9]", "-", str(cwd_path)).strip("-")
+            candidate = paths.claude_projects_dir() / slug
+            if candidate.is_dir():
+                proj_dir = candidate
+
+        if proj_dir is None:
+            return
+
+        memory_dir = proj_dir / "memory"
+        if not memory_dir.is_dir():
+            return
+
+        # Throttle: skip if sentinel mtime < throttle window.
+        sentinel_dir = paths.ensure_dir(paths.data_dir() / "memory_prune")
+        sentinel = sentinel_dir / f"{proj_dir.name}.last"
+        now = time.time()
+        try:
+            if sentinel.exists() and (now - sentinel.stat().st_mtime) < _MEMORY_PRUNE_THROTTLE_H * 3600:
+                return
+        except OSError:
+            pass
+
+        from . import memory_prune  # noqa: PLC0415
+
+        result = memory_prune.prune_index(memory_dir)
+        if result.changed:
+            _LOG.info(
+                "memory-prune: removed %d dead + %d dup entries from %s (~%d tokens saved)",
+                len(result.removed_dead),
+                len(result.removed_dup),
+                proj_dir.name,
+                result.tokens_saved,
+            )
+
+        import contextlib as _cl  # noqa: PLC0415
+        with _cl.suppress(Exception):  # Update sentinel to suppress reruns; ignore write failures.
+            paths.atomic_write_text(sentinel, str(now))
+
+    except Exception:  # noqa: BLE001
+        _LOG.debug("memory-prune: failed (non-fatal)", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1687,6 +1758,9 @@ def session_start(payload: HookPayload) -> HookResponse:
     # a chance to fire (so a misdetection of source can't both reset the
     # cache and lose the recovery data).
     _reset_session_cache(session_id)
+
+    # Best-effort: prune dead + dup MEMORY.md entries (throttled 24 h, never raises, atomic rewrite).
+    _prune_memory_index(session_id, cwd)
 
     # Build the git orientation brief (injected as systemMessage so it takes
     # priority over additionalContext and is visible immediately at session start).
