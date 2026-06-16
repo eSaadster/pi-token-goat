@@ -4,6 +4,8 @@ All notable changes to Token-Goat are documented in this file. Format follows Ke
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-06-16
+
 ### Added
 
 - **`TerraformFilter` extended: `terraform show` compression and plan data-source detection.** `terraform show` output now strips noise attributes (id, arn, timeouts, tags blocks) per resource block and appends a suppression note; only meaningful fields survive. `terraform plan` unchanged-block detection now covers data-source read-during-apply blocks in addition to managed-resource no-op blocks.
