@@ -12,6 +12,12 @@ All notable changes to Token-Goat are documented in this file. Format follows Ke
 
 - **`NpmInstallFilter` extended: warn collapsing and verbose line suppression.** `npm warn` lines after the first 3 are collapsed to a suppression note. Verbose timing, sill, http, and verb lines are suppressed entirely. Braille spinner reify progress lines are stripped.
 
+- **Three-layer watchdog budget resolution.** `_resolved_watchdog_ms()` now reads `config.load().hooks.watchdog_ms` (default 5000 ms) when no `TOKEN_GOAT_HOOK_WATCHDOG_MS` env var is set. Previously it fell straight through to the 2000 ms compile-time constant, ignoring whatever `[hooks].watchdog_ms` was set to. Resolution order: (1) env var, (2) project config baseline (process-level mtime-cached, one `os.stat()` on the fast path), (3) `_HOOK_WATCHDOG_MS = 2000 ms` compile-time fallback. Values below the 100 ms floor are clamped regardless of layer.
+
+- **Reread-deny hint shows real indexed symbols.** `_handle_reread_deny` now queries the project DB for up to 8 non-import, non-variable symbols in the denied file and emits exact `token-goat read "path::Symbol"` commands in the hint instead of the static `::SymbolName` placeholder. The lookup uses `find_project` from the file path, so no `cwd` parameter is required. If the file is not indexed or the query fails, the hint falls back to the generic placeholder silently.
+
+- **`_handle_doc_compact` auto-spawns `compact-doc` in the background.** When the section-map path fires for a large markdown file, it now launches `compact-doc <file>` as a fire-and-forget subprocess so the compact sidecar is ready on the next read. A per-file session fingerprint (`compact_doc_spawned:<path>`) prevents re-spawning for the same file within a session. If `token-goat` is not on PATH or the spawn fails, the hook continues normally.
+
 ### Fixed
 
 - **`TerraformFilter._compress_terraform_init` head/tail fallback.** When `terraform init` progress lines (e.g., `Installing plugin N`) did not match the provider-specific regex, all lines passed through unchanged. The method now applies head=5/tail=5 compression whenever `len(non_empty) > 12` after provider-line collapsing.

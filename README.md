@@ -37,6 +37,12 @@ Built and continually improved, free, by one person. If it saves you tokens, dro
 
 ---
 
+<p align="center">
+  <img src="assets/stats_v180.png" alt="token-goat stats — v1.8.0" width="589">
+  <br>
+  <sub><b>v1.8.0</b> — with bash output compression and extended filter library</sub>
+</p>
+
 ## The problem
 
 AIs read `auth.py`. Then reads it again. And again. Then a third time after compaction wipes the session. Then it can't find what it wanted and searches other lines and files. You pay for every token and most of it is waste.
@@ -123,12 +129,6 @@ The fastest way to reduce AI token costs is fixing these five, not writing short
 | `kubectl events` lists raw repetitive events | Events grouped by REASON with a per-group count; field-selector hint added to narrow scope |
 | `kubectl describe` floods labels and annotations | Labels/annotations blocks collapsed to line counts; Conditions table kept in full; container resource fields preserved |
 | `npm install` verbose output with sill/http/verb/spinner lines | Verbose timing, sill, http, verb lines suppressed; warn lines beyond first 3 collapsed; braille spinner reify lines dropped |
-
-<p align="center">
-  <img src="assets/stats_v180.png" alt="token-goat stats — v1.8.0" width="589">
-  <br>
-  <sub><b>v1.8.0</b> — with bash output compression and extended filter library</sub>
-</p>
 
 On a per-token API plan, 100K wasted tokens per session runs about $0.30. Five sessions a week is ~$450/year. AI coding cost reduction at that scale comes from fixing the waste, not from using the product less. Token-goat is free. And on subscription plans, it can result in limits feeling 10x higher.
 
