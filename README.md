@@ -7,61 +7,33 @@ permalink: /
 
 # Token-Goat
 
-<p align="center">
-  <img src="assets/logo.png" alt="Token-Goat" width="700">
-</p>
+![Token-Goat](assets/logo.png)
 
-<p align="center">
-  <b>85%</b> smaller reads &nbsp;·&nbsp; <b>97.4%</b> image compression &nbsp;·&nbsp; <b>130+</b> bash output filters &nbsp;·&nbsp; <b>94–99%</b> skill overhead cut &nbsp;·&nbsp; compaction memory
-</p>
+**85%** smaller reads · **97.4%** image compression · **130+** bash output filters · **94–99%** skill overhead cut · compaction memory
 
-<p align="center"><b>Reduces AI token use/costs by 40–90%, and improves its focus. Fully automated, always online.</b></p>
+**Reduces AI token use/costs by 40–90%, and improves its focus. Fully automated, always online.**
 
-<p align="center"><b>Your AI re-reads the same file three times. Every compaction causes amnesia. Every build log buries the one line that matters. You pay for all of it. Token-Goat fixes all of it — automatically.</b></p>
+**Your AI re-reads the same file three times. Every compaction causes amnesia. Every build log buries the one line that matters. You pay for all of it. Token-Goat fixes all of it — automatically.**
 
-<p align="center">
-Token-Goat sits silently between your AI and your tools. Re-read a file? It gets a one-line hint and a narrow-slice suggestion instead of the full file again. Grab a screenshot? A 100&nbsp;KB copy reaches the model instead of 10&nbsp;MB. Run <code>pytest</code>, <code>npm install</code>, <code>docker build</code>, or <code>cargo</code>? The thousands of progress bars and passing-test names are stripped to the failures before the output even reaches the context window. Compact a long session? It gets a clean structured manifest of edited files and key symbols so nothing important is forgotten. Sessions drop 40–90%+ in cost. You change nothing about how you work.
-</p>
+Token-Goat sits silently between your AI and your tools. Re-read a file? It gets a one-line hint and a narrow-slice suggestion instead of the full file again. Grab a screenshot? A 100 KB copy reaches the model instead of 10 MB. Run `pytest`, `npm install`, `docker build`, or `cargo`? The thousands of progress bars and passing-test names are stripped to the failures before the output even reaches the context window. Compact a long session? It gets a clean structured manifest of edited files and key symbols so nothing important is forgotten. Sessions drop 40–90%+ in cost. You change nothing about how you work.
 
-<p align="center">
-Works with <b>Claude Code</b>, <b>Gemini CLI</b>, <b>Codex CLI</b>, <b>Aider</b>, <b>Cursor</b>, <b>Cline</b>, <b>Windsurf</b>, <b>Copilot CLI</b>, OpenCode, and OpenClaw.
-</p>
+Works with **Claude Code**, **Gemini CLI**, **Codex CLI**, **Aider**, **Cursor**, **Cline**, **Windsurf**, **Copilot CLI**, OpenCode, and OpenClaw.
 
-<p align="center">
-<b>Ask your AI to install it fully (give it this GitHub link), or install in one command (install UV first if needed):</b>
-</p>
+**Ask your AI to install it fully (give it this GitHub link), or install in one command (install UV first if needed):**
 
-<pre align="center"><code>uv tool install token-goat && token-goat install</code></pre>
+```
+uv tool install token-goat && token-goat install
+```
 
-<p align="center">
-Restart your AI sessions. Run <code>token-goat stats</code> a couple of minutes after your next session to see the massive savings. It also doubles as a great tracker of your work. Welcome to token efficiency.
-</p>
+Restart your AI sessions. Run `token-goat stats` a couple of minutes after your next session to see the massive savings. It also doubles as a great tracker of your work. Welcome to token efficiency.
 
-<p align="center">
-  <a href="https://pypi.org/project/token-goat/"><img src="https://img.shields.io/pypi/v/token-goat?label=PyPI&logo=pypi&logoColor=white" alt="PyPI version"></a>
-  <a href="https://github.com/DFKHelper/token-goat/actions/workflows/ci.yml"><img src="https://github.com/DFKHelper/token-goat/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://pypi.org/project/token-goat/"><img src="https://img.shields.io/pypi/pyversions/token-goat?logo=python&logoColor=white" alt="Python 3.12 | 3.13"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-lightgrey" alt="PolyForm Noncommercial"></a>
-</p>
+[![PyPI version](https://img.shields.io/pypi/v/token-goat?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/token-goat/) [![CI status](https://github.com/DFKHelper/token-goat/actions/workflows/ci.yml/badge.svg)](https://github.com/DFKHelper/token-goat/actions/workflows/ci.yml) [![Python 3.12 | 3.13](https://img.shields.io/pypi/pyversions/token-goat?logo=python&logoColor=white)](https://pypi.org/project/token-goat/) [![PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-lightgrey)](LICENSE)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?logo=windows&logoColor=white" alt="Windows 10 | 11">
-  <img src="https://img.shields.io/badge/Linux-including%20WSL-FCC624?logo=linux&logoColor=black" alt="Linux including WSL">
-  <img src="https://img.shields.io/badge/macOS-untested-lightgrey?logo=apple&logoColor=white" alt="macOS (untested)">
-  <img src="https://img.shields.io/badge/requires-uv-6340ac" alt="requires uv">
-</p>
+![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?logo=windows&logoColor=white) ![Linux including WSL](https://img.shields.io/badge/Linux-including%20WSL-FCC624?logo=linux&logoColor=black) ![macOS (untested)](https://img.shields.io/badge/macOS-untested-lightgrey?logo=apple&logoColor=white) ![requires uv](https://img.shields.io/badge/requires-uv-6340ac)
 
-<p align="center">
-  Built and continually improved, free, by one person. If it saves you tokens, drop a ⭐️ at the top of this page. One click. Makes my day. Also, if you'd like anything added, drop me a line.
-</p>
+Built and continually improved, free, by one person. If it saves you tokens, drop a ⭐️ at the top of this page. One click. Makes my day. Also, if you'd like anything added, drop me a line.
 
-<p align="center">
-  <a href="#install">Install</a> &nbsp;·&nbsp;
-  <a href="#cli">CLI</a> &nbsp;·&nbsp;
-  <a href="#what-gets-installed">What gets installed?</a> &nbsp;·&nbsp;
-  <a href="#stats-display">Stats</a> &nbsp;·&nbsp;
-  <a href="#security-privacy-and-uninstall">Security & uninstall</a>
-</p>
+[Install](#install) · [CLI](#cli) · [What gets installed?](#what-gets-installed) · [Stats](#stats-display) · [Security & uninstall](#security-privacy-and-uninstall)
 
 ---
 
