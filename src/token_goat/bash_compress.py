@@ -4036,7 +4036,11 @@ class KubectlFilter(Filter):
 
         if subcommand in ("get", "top"):
             if "\n" in text:
-                text = _compress_kubectl_table(text, max_rows=10)
+                resource = positionals[1] if len(positionals) > 1 else ""
+                if resource in ("events", "ev", "event"):
+                    text = _compress_kubectl_events(text)
+                else:
+                    text = _compress_kubectl_table(text, max_rows=10)
         elif subcommand == "describe":
             if "\n" in text:
                 text = _compress_kubectl_describe(text)
@@ -4076,38 +4080,119 @@ def _compress_kubectl_table(text: str, max_rows: int = 10) -> str:
     )
 
 
+def _compress_kubectl_events(text: str) -> str:
+    """Collapse ``kubectl get events`` output by grouping on REASON.
+
+    Keeps the most recent *_MAX_PER_REASON* rows per unique REASON value and
+    emits a count for elided older rows.  Falls back to the generic table
+    compressor when the header does not look like an events table.
+    """
+    _MAX_PER_REASON = 3
+    lines = text.split("\n")
+    non_empty = [ln for ln in lines if ln.strip()]
+    if len(non_empty) <= 5:
+        return text
+    header = non_empty[0]
+    if "REASON" not in header.upper():
+        return _compress_kubectl_table(text, max_rows=10)
+    reason_idx = header.upper().find("REASON")
+    groups: dict[str, list[str]] = {}
+    for row in non_empty[1:]:
+        if len(row) > reason_idx:
+            tail = row[reason_idx:]
+            reason = tail.split()[0] if tail.split() else "Unknown"
+        else:
+            reason = "Unknown"
+        groups.setdefault(reason, []).append(row)
+    kept = [header]
+    total_elided = 0
+    for reason, rows in groups.items():
+        if len(rows) <= _MAX_PER_REASON:
+            kept.extend(rows)
+        else:
+            elided = len(rows) - _MAX_PER_REASON
+            total_elided += elided
+            kept.extend(rows[-_MAX_PER_REASON:])
+            kept.append(f"  [token-goat: {elided} earlier '{reason}' events elided]")
+    if total_elided:
+        kept.append(f"[token-goat: {total_elided} events collapsed; use --field-selector to filter]")
+    return "\n".join(kept)
+
+
 def _compress_kubectl_describe(text: str) -> str:
-    """Extract Name/Namespace/Status and Events section from kubectl describe."""
+    """Extract key metadata from ``kubectl describe`` output.
+
+    * **Labels / Annotations**: collapsed to header + 3 entries to avoid
+      walls of SHA hashes that dominate real describe output.
+    * **Conditions**: kept in full — compact, high-signal table.
+    * **Container fields**: Image, State, Ready, Restart Count, Limits/Requests,
+      Exit Code, Started, Finished are now included.
+    * **Events**: last 10 lines; earlier entries elided with a count.
+    """
+    _KEY_PREFIXES = (
+        "Name:", "Namespace:", "Status:", "State:", "Node:", "IP:", "PodIP:",
+        "NodeIP:", "QoS Class:", "Priority:", "Image:", "Ready:", "Restart Count:",
+        "Started:", "Finished:", "Exit Code:", "Reason:", "Message:",
+        "Replicas:", "StrategyType:", "Selector:", "Type:", "ClusterIP:",
+        "Limits:", "Requests:", "cpu:", "memory:",
+    )
     lines = text.split("\n")
     kept: list[str] = []
-
-    # Scan for key fields in the header
-    for line in lines:
-        if any(key in line for key in ["Name:", "Namespace:", "Status:", "State:"]):
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if not stripped:
+            i += 1
+            continue
+        label_key = stripped.split(":")[0] if ":" in stripped else ""
+        # Collapse Labels / Annotations: keep header + first 3 indented entries
+        if label_key in ("Labels", "Annotations"):
             kept.append(line)
-
-    # Scan for Events section; keep last 10 event lines
-    events_start = -1
-    for i, line in enumerate(lines):
-        if line.startswith("Events:"):
-            events_start = i
+            header_indent = len(line) - len(line.lstrip())
+            entries: list[str] = []
+            i += 1
+            while i < len(lines):
+                nxt = lines[i]
+                nxt_indent = len(nxt) - len(nxt.lstrip()) if nxt.strip() else 0
+                if nxt.strip() and nxt_indent > header_indent:
+                    entries.append(nxt)
+                    i += 1
+                else:
+                    break
+            kept.extend(entries[:3])
+            if len(entries) > 3:
+                kept.append(" " * (header_indent + 2) + f"[token-goat: {len(entries) - 3} more entries elided]")
+            continue
+        # Conditions: keep the whole section (compact high-signal table)
+        if stripped.startswith("Conditions:"):
+            kept.append(line)
+            i += 1
+            while i < len(lines):
+                nxt = lines[i]
+                if not nxt.strip():
+                    break
+                kept.append(nxt)
+                i += 1
+            continue
+        # Events: keep last 10 lines, elide older with a count
+        if stripped.startswith("Events:"):
+            kept.append("")
+            kept.append("Events:")
+            event_lines = [ln for ln in lines[i + 1:] if ln.strip()]
+            if event_lines:
+                if len(event_lines) > 10:
+                    kept.append(f"  [token-goat: {len(event_lines) - 10} earlier events elided]")
+                    kept.extend(event_lines[-10:])
+                else:
+                    kept.extend(event_lines)
             break
-
-    if events_start >= 0:
-        kept.append("")
-        kept.append("Events:")
-        event_lines = [ln for ln in lines[events_start + 1:] if ln.strip()]
-        if event_lines:
-            if len(event_lines) > 10:
-                kept.append(f"[token-goat: {len(event_lines) - 10} earlier events elided]")
-                kept.extend(event_lines[-10:])
-            else:
-                kept.extend(event_lines)
-
+        # Key single-line fields always kept
+        if any(stripped.startswith(pfx) for pfx in _KEY_PREFIXES):
+            kept.append(line)
+        i += 1
     if not kept:
-        # Fallback: header + first 20 lines
         return "\n".join(lines[:20]) + "\n[token-goat: describe output truncated]"
-
     return "\n".join(kept)
 
 
