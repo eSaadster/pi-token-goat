@@ -57,8 +57,8 @@ def test_verbose_ok_payload_suppressed() -> None:
     # JSON payload lines are suppressed
     assert '"ping"' not in result
     assert '"changed": false' not in result
-    # Payload elision is noted
-    assert "verbose payload" in result or "elided" in result
+    # Payload elision is noted (2 hosts, 2 payloads)
+    assert "2 verbose payloads elided" in result
 
 
 def test_verbose_ok_payload_elided_count_accurate() -> None:
@@ -100,7 +100,7 @@ def test_verbose_changed_payload_suppressed() -> None:
     result = _compress(out)
     assert "1 changed" in result
     assert '"dest"' not in result
-    assert "verbose payload" in result or "elided" in result
+    assert "1 verbose payload elided" in result
 
 
 def test_verbose_skipped_payload_suppressed() -> None:
@@ -113,6 +113,7 @@ def test_verbose_skipped_payload_suppressed() -> None:
     result = _compress(out)
     assert "1 skipping" in result
     assert '"false_condition"' not in result
+    assert "1 verbose payload elided" in result
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +256,7 @@ def test_headers_always_kept() -> None:
 def test_check_mode_annotation_long_flag() -> None:
     out = "PLAY [all] *****\nTASK [test] *****\nok: [h1]\n"
     result = _compress(out, argv=["ansible-playbook", "site.yml", "--check"])
-    assert "--check" in result or "dry run" in result
+    assert "--check" in result
     assert "no actual changes" in result
 
 
