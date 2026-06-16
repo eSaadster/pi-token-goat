@@ -9,6 +9,11 @@ author:
   name: DFKHelper
   url: https://github.com/DFKHelper
 
+exclude:
+  - docs/plans/
+  - tests/
+  - scripts/
+
 plugins:
   - jekyll-seo-tag
   - jekyll-sitemap

@@ -152,24 +152,10 @@ The fastest way to reduce AI token costs is fixing these five, not writing short
 | `kubectl describe` floods labels and annotations | Labels/annotations blocks collapsed to line counts; Conditions table kept in full; container resource fields preserved |
 | `npm install` verbose output with sill/http/verb/spinner lines | Verbose timing, sill, http, verb lines suppressed; warn lines beyond first 3 collapsed; braille spinner reify lines dropped |
 
-> Three snapshots from the author's machine: **v0.1 after four hours**, **v1.8.0**, and the **current build after several days** of real sessions.
-
-<p align="center">
-  <img src="assets/stats.png" alt="token-goat stats — v0.1 after four hours of use" width="589">
-  <br>
-  <sub><b>v0.1</b> — after four hours of use</sub>
-</p>
-
 <p align="center">
   <img src="assets/stats_v180.png" alt="token-goat stats — v1.8.0" width="589">
   <br>
   <sub><b>v1.8.0</b> — with bash output compression and extended filter library</sub>
-</p>
-
-<p align="center">
-  <img src="assets/stats_current.png" alt="token-goat stats — current build after several days" width="589">
-  <br>
-  <sub><b>Current build</b> — after several days, now with per-kind and per-source breakdowns</sub>
 </p>
 
 On a per-token API plan, 100K wasted tokens per session runs about $0.30. Five sessions a week is ~$450/year. AI coding cost reduction at that scale comes from fixing the waste, not from using the product less. Token-goat is free. And on subscription plans, it can result in limits feeling 10x higher.
