@@ -123,3 +123,32 @@ dmypy.json
 *.db-wal
 *.db-shm
 .cc-shrunken.*
+.improve-state-*.json
+tmp_data/
+tmptg-py313b/
+tmptg-py313-venv/
+
+# Patent filings — personal, not for public repo
+PATENT_PROVISIONAL_DRAFT.md
+PATENT_PROVISIONAL_DRAFT.pdf
+convert_patent_pdf.py
+
+*patent*.pdf
+*patent*.md
+patantsub.pdf
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Claude Code project instructions — kept local, not for public repo
+CLAUDE.md
+
+# Test/temp artifacts
+.tmp/
+.verify-manual/
+.improve-state-*.json
+# Accidental local data dir from misconfigured LOCALAPPDATA in dev/test runs
+.localapp/
+.improve-state-*.json
