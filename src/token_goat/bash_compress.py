@@ -9636,9 +9636,9 @@ class AnsibleFilter(Filter):
             return self._compress_ansible_galaxy(stdout, stderr)
 
         # Default: ansible, ansible-playbook, ansible-pull compression.
-        return self._compress_ansible_playbook(stdout, stderr)
+        return self._compress_ansible_playbook(stdout, stderr, argv=argv)
 
-    def _compress_ansible_playbook(self, stdout: str, stderr: str) -> str:
+    def _compress_ansible_playbook(self, stdout: str, stderr: str, argv: list[str] | None = None) -> str:
         """Compress ansible-playbook output: collapse status lines, keep headers & recap."""
         merged = self._combine_output(stdout, stderr)
         lines = merged.split("\n")
@@ -9647,20 +9647,32 @@ class AnsibleFilter(Filter):
         status_counts: dict[str, int] = {}
         in_recap = False
         in_fail_payload = False
+        in_success_payload = False  # suppress verbose => {} JSON blocks after ok/changed/skipped
+        brace_depth = 0
+        payload_elided = [0]  # per-task count of suppressed verbose payloads; list allows mutation in closure
 
         def flush_status() -> None:
             if not status_counts:
                 return
             parts = [f"{n} {label}" for label, n in status_counts.items() if n]
             if parts:
-                kept.append(f"[token-goat: {', '.join(parts)}]")
+                note = ", ".join(parts)
+                if payload_elided[0]:
+                    note += f", {payload_elided[0]} verbose payload{'s' if payload_elided[0] != 1 else ''} elided"
+                kept.append(f"[token-goat: {note}]")
             status_counts.clear()
+            payload_elided[0] = 0
+
+        # Annotate dry-run mode so the reader knows no actual changes were applied.
+        if argv and ("--check" in argv or "-C" in argv):
+            kept.append("[token-goat: ansible-playbook --check (dry run — no actual changes)]")
 
         for line in lines:
             if _ANSIBLE_RECAP_RE.match(line):
                 flush_status()
                 in_recap = True
                 in_fail_payload = False
+                in_success_payload = False
                 kept.append(line)
                 continue
             if in_recap:
@@ -9672,6 +9684,7 @@ class AnsibleFilter(Filter):
             if _ANSIBLE_FAIL_RE.match(line):
                 flush_status()
                 in_fail_payload = True
+                in_success_payload = False
                 kept.append(line)
                 continue
             if in_fail_payload:
@@ -9684,13 +9697,31 @@ class AnsibleFilter(Filter):
                 else:
                     kept.append(line)
                     continue
+            # Suppress verbose JSON payloads that follow ok/changed/skipped status lines.
+            if in_success_payload:
+                if _ANSIBLE_HEADER_RE.match(line) or _ANSIBLE_FAIL_RE.match(line) or _ANSIBLE_RECAP_RE.match(line):
+                    # Structural boundary: exit payload mode and fall through to normal handling.
+                    in_success_payload = False
+                    brace_depth = 0
+                else:
+                    brace_depth += line.count("{") - line.count("}")
+                    if brace_depth <= 0:
+                        in_success_payload = False
+                        brace_depth = 0
+                    continue
             if _ANSIBLE_HEADER_RE.match(line):
                 flush_status()
+                in_success_payload = False
                 kept.append(line)
                 continue
             if _ANSIBLE_STATUS_RE.match(line):
                 label = line.split(":", 1)[0].strip()
                 status_counts[label] = status_counts.get(label, 0) + 1
+                # If the status line ends with `{`, the following lines are a verbose JSON payload.
+                if line.rstrip().endswith("{"):
+                    in_success_payload = True
+                    brace_depth = 1
+                    payload_elided[0] += 1
                 continue
             kept.append(line)
         flush_status()

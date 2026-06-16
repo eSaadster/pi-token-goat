@@ -147,12 +147,18 @@ The fastest way to reduce AI token costs is fixing these five, not writing short
 | Test suite slow on multi-core machines | `pytest-xdist --dist=loadscope` + module-scoped fixtures for read-only groups; parallel workers cut wall time |
 | Flaky tests fail the whole run | `pytest-rerunfailures` auto-retries once before failing; `pytest-randomly` seeds expose order-dependent flakes |
 
-> Two snapshots from the author's machine: **v0.1 after four hours**, and the **current build after several days** of real sessions.
+> Three snapshots from the author's machine: **v0.1 after four hours**, **v1.8.0**, and the **current build after several days** of real sessions.
 
 <p align="center">
   <img src="assets/stats.png" alt="token-goat stats — v0.1 after four hours of use" width="589">
   <br>
   <sub><b>v0.1</b> — after four hours of use</sub>
+</p>
+
+<p align="center">
+  <img src="assets/stats_v180.png" alt="token-goat stats — v1.8.0" width="589">
+  <br>
+  <sub><b>v1.8.0</b> — with bash output compression and extended filter library</sub>
 </p>
 
 <p align="center">
