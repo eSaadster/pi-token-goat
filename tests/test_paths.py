@@ -1,4 +1,5 @@
 """Test paths module."""
+import shlex
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,29 @@ def test_python_runner_command_no_args():
     cmd = paths.python_runner_command()
     assert isinstance(cmd, str)
     assert "token_goat.cli" in cmd
+
+
+def test_python_runner_command_cmd_with_inner_double_quotes():
+    """--cmd args containing double quotes must round-trip intact.
+
+    Regression for the schtasks /Run bug: naive '"..."' wrapping of
+    'powershell.exe -Command "schtasks /Run ..."' closes the outer quote at
+    the first inner '"', so the shell sees '--cmd powershell.exe -Command'
+    and bare 'schtasks' tokens — causing Windows to run 'schtasks' with no
+    subcommand, which dumps all scheduled tasks instead of running one.
+    """
+    cmd_arg = 'powershell.exe -Command "schtasks /Run /TN \'LiteLLM GLM Proxy\' 2>&1"'
+    cmd = paths.python_runner_command("compress", "--cmd", cmd_arg)
+    # Parse the generated string exactly as Git Bash does.
+    parsed = shlex.split(cmd, posix=True)
+    assert "--cmd" in parsed
+    cmd_idx = parsed.index("--cmd")
+    assert parsed[cmd_idx + 1] == cmd_arg, (
+        f"--cmd value was truncated or corrupted.\n"
+        f"  Expected: {cmd_arg!r}\n"
+        f"  Got:      {parsed[cmd_idx + 1]!r}\n"
+        f"  Full cmd: {cmd!r}"
+    )
 
 
 def test_global_db_path_structure(tmp_data_dir):

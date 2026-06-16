@@ -3353,7 +3353,9 @@ def stats(
         sid = None if global_ else session_id
         label = "all-time" if global_ else f"session {session_id[:8] if session_id else ''}"
         data = _db.get_compression_stats(session_id=sid)
+        _hook_timing = _db.get_hook_timing_stats(window_days=7)
         if json_output:
+            data["hook_timing"] = _hook_timing
             typer.echo(json.dumps(data, separators=(",", ":")))
         else:
             typer.echo(f"Token savings ({label}):")
@@ -3361,6 +3363,13 @@ def stats(
             typer.echo(f"  Estimated tokens saved  : {data['tokens_saved']:,}")
             typer.echo(f"  Reread denies           : {data['reread_denies']:,}")
             typer.echo(f"  Images shrunk           : {data['images_shrunk']:,}")
+            if _hook_timing:
+                typer.echo("\nHook latency (last 7d):")
+                for _evt, _ht in sorted(_hook_timing.items(), key=lambda x: -x[1]["avg_ms"]):
+                    typer.echo(
+                        f"  {_evt:<30s} N={_ht['count']:>4}  "
+                        f"avg={_ht['avg_ms']:>5}ms  p95={_ht['p95_ms']:>5}ms  max={_ht['max_ms']:>5}ms"
+                    )
         return
 
     # --since is a friendlier alias for --window; it takes precedence when both are specified.

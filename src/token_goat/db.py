@@ -2193,6 +2193,45 @@ def get_compression_stats(session_id: str | None = None) -> dict:
     }
 
 
+
+def get_hook_timing_stats(window_days: int = 7) -> dict[str, dict[str, int]]:
+    """Return per-hook-event timing stats from the stats table.
+
+    Queries rows where ``kind LIKE 'hook:%'``; ``bytes_saved`` stores
+    elapsed_ms written by ``hooks_cli.safe_run`` after each dispatch.
+
+    Args:
+        window_days: Look-back window in days.  0 = all time.
+
+    Returns:
+        Mapping of event name (stripped of ``hook:`` prefix) →
+        ``{count, avg_ms, p95_ms, max_ms}``.
+    """
+    since_ts = time.time() - (window_days * 86400) if window_days > 0 else 0.0
+    result: dict[str, dict[str, int]] = {}
+    try:
+        with open_global_readonly() as conn:
+            rows = conn.execute(
+                "SELECT kind, bytes_saved FROM stats WHERE kind LIKE 'hook:%' AND ts >= ? ORDER BY kind",
+                (since_ts,),
+            ).fetchall()
+    except Exception:  # noqa: BLE001
+        return result
+    by_event: dict[str, list[int]] = {}
+    for row in rows:
+        event = str(row[0])[5:]  # strip leading "hook:"
+        ms = max(0, int(row[1]))
+        by_event.setdefault(event, []).append(ms)
+    for event, values in by_event.items():
+        values.sort()
+        n = len(values)
+        avg_ms = sum(values) // n
+        p95_ms = values[max(0, int(n * 0.95) - 1)]
+        max_ms = values[-1]
+        result[event] = {"count": n, "avg_ms": avg_ms, "p95_ms": p95_ms, "max_ms": max_ms}
+    return result
+
+
 def get_entry_scores(project_hash: str) -> dict[str, float]:
     """Return file_rel → importance score for use by compact manifest trim ordering.
 

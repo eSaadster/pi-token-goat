@@ -583,6 +583,18 @@ def safe_run(event: str, input_file: Path | None = None, harness: Harness = "cla
             )
             result = dict(dispatched)
     emit(result)
+    # Best-effort: record hook timing AFTER emit() so the stat write never adds
+    # latency visible to the harness.  bytes_saved stores elapsed_ms as an int
+    # so SQL aggregates (AVG/MAX) work without a schema change.
+    with contextlib.suppress(Exception):
+        _elapsed_ms = result.get("_tg_elapsed_ms")
+        if isinstance(_elapsed_ms, (int, float)):
+            from . import db as _db  # noqa: PLC0415
+            _db.record_stat(
+                None,
+                f"hook:{sanitize_log_str(event, max_len=48)}",
+                bytes_saved=int(_elapsed_ms),
+            )
 
 
 _P = ParamSpec("_P")

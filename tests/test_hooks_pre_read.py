@@ -2943,3 +2943,83 @@ class TestPreReadBashSafeLoadRegression:
         assert "bash_load_tracking" in safe_load_calls, (
             "safe_load must be called in the Bash branch of pre_read (P3-9 regression)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Bash fast-path early exit
+# ---------------------------------------------------------------------------
+
+
+class TestBashFastPath:
+    """pre_read must return CONTINUE immediately for unrecognized Bash binaries
+    without loading the session cache (saves ~1 s per hook call)."""
+
+    def test_unrecognized_binary_skips_session_load(self, tmp_data_dir, monkeypatch):
+        """chmod / rm / mkdir are fast-pathed: CONTINUE without safe_load."""
+        import token_goat.session as _session
+
+        calls: list[str] = []
+        orig = _session.safe_load
+
+        def _tracking(sid, *a, **kw):
+            calls.append(sid)
+            return orig(sid, *a, **kw)
+
+        monkeypatch.setattr(_session, "safe_load", _tracking)
+
+        for cmd in ("chmod +x script.sh", "rm -rf /tmp/junk", "mkdir -p /srv/data"):
+            payload = {
+                "session_id": "fp-1",
+                "tool_name": "Bash",
+                "tool_input": {"command": cmd},
+            }
+            result = hooks_cli.pre_read(payload)
+            _assert_continue(result)
+            assert "hookSpecificOutput" not in result, (
+                f"fast-pathed command {cmd!r} must not produce hookSpecificOutput"
+            )
+
+        assert calls == [], "safe_load must not be called for fast-pathed commands"
+
+    def test_fast_path_exclude_reaches_handler_chain(self, tmp_data_dir, monkeypatch):
+        """which/where are in _BASH_FAST_PATH_EXCLUDE â†’ session IS loaded."""
+        import token_goat.session as _session
+
+        calls: list[str] = []
+        orig = _session.safe_load
+
+        def _tracking(sid, *a, **kw):
+            calls.append(sid)
+            return orig(sid, *a, **kw)
+
+        monkeypatch.setattr(_session, "safe_load", _tracking)
+
+        payload = {
+            "session_id": "fp-2",
+            "tool_name": "Bash",
+            "tool_input": {"command": "which node"},
+        }
+        hooks_cli.pre_read(payload)
+        assert "fp-2" in calls, "which/where must not be fast-pathed â€” safe_load must be called"
+
+    def test_compound_command_not_fast_pathed(self, tmp_data_dir, monkeypatch):
+        """Commands with && C:/Projects/token-goat/.venv/Scripts/pythonw.exe -m token_goat.cli compress --filter tail-trunc --timeout 600 --profile balanced --max-tokens 8000 --cmd 'bypass the fast-path guard (too complex to inspect first token)."""
+        import token_goat.session as _session
+
+        calls: list[str] = []
+        orig = _session.safe_load
+
+        def _tracking(sid, *a, **kw):
+            calls.append(sid)
+            return orig(sid, *a, **kw)
+
+        monkeypatch.setattr(_session, "safe_load", _tracking)
+
+        payload = {
+            "session_id": "fp-3",
+            "tool_name": "Bash",
+            "tool_input": {"command": "chmod +x script.sh' && C:/Projects/token-goat/.venv/Scripts/pythonw.exe -m token_goat.cli compress --filter tail-trunc --timeout 600 --profile balanced --max-tokens 8000 --cmd './script.sh"},
+        }
+        result = hooks_cli.pre_read(payload)
+        _assert_continue(result)
+        assert "fp-3" in calls, "compound commands (' && ) must not be fast-pathed"

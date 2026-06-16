@@ -1668,3 +1668,24 @@ class TestResolveHandlerImportErrorHardening:
 
         result = hc.dispatch("session-start", {"session_id": "test-123"})
         assert result.get("continue") is True, "dispatch must return continue:true on import failure"
+
+
+# ---------------------------------------------------------------------------
+# Hook timing recording in safe_run
+# ---------------------------------------------------------------------------
+
+def test_safe_run_records_hook_timing_stat(tmp_path, tmp_data_dir):
+    """safe_run must write a hook:* timing row to the global stats DB after emit."""
+    from token_goat.db import get_hook_timing_stats
+
+    payload_file = tmp_path / "payload.json"
+    payload_file.write_text('{"session_id": "timing-sess"}', encoding="utf-8")
+    hooks_cli.safe_run("session-start", input_file=payload_file)
+
+    # window_days=0 → since_ts=0.0 → all rows regardless of age
+    stats = get_hook_timing_stats(window_days=0)
+    assert "session-start" in stats, (
+        f"expected 'session-start' in hook timing stats; got: {list(stats)}"
+    )
+    assert stats["session-start"]["count"] >= 1
+    assert stats["session-start"]["avg_ms"] >= 0

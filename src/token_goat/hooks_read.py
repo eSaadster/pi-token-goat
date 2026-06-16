@@ -215,6 +215,12 @@ def _resolve_compression_profile(harness: str, config_profile: str) -> str:
     return "minimal" if harness == "gemini" else "balanced"
 
 
+#: Binaries absent from bash_detect/_BINARY_TO_FILTER and bash_parser READ/GREP/GLOB_BINS
+#: that still have handler-specific logic and must NOT be short-circuited by the fast-path.
+#: which / where → _handle_env_probe_serve caches version-probe results.
+_BASH_FAST_PATH_EXCLUDE: frozenset[str] = frozenset({"which", "where"})
+
+
 def _handle_bash_compress(payload: HookPayload) -> HookResponse | None:
     """Rewrite compressible Bash commands to flow through ``token-goat compress``.
 
@@ -3734,6 +3740,27 @@ def pre_read(payload: HookPayload) -> HookResponse:
     tool_name = payload.get("tool_name")
 
     if tool_name == "Bash":
+        # Fast-path: for commands whose binary is not in any handler's recognition
+        # table, return CONTINUE immediately without loading the session cache or
+        # DB — saves ~1 s per hook call for the ~50% of Bash invocations that
+        # produce nothing.  Excluded: bash_detect binaries (compress), READ/GREP/GLOB
+        # binaries (read-equiv / grep handlers), token-goat commands (env-probe /
+        # dep-list), _BASH_FAST_PATH_EXCLUDE (which/where), and && commands (compound hint).
+        _fp_input = get_tool_input(payload)
+        _fp_cmd = (_fp_input.get("command") or "").strip()
+        if _fp_cmd and "&&" not in _fp_cmd:
+            _fp_first = (_fp_cmd.split()[0] if _fp_cmd.split() else "").lower()
+            if _fp_first and not _fp_first.startswith(("token-goat", "token_goat")):
+                from . import bash_detect as _bdet  # noqa: PLC0415
+                from . import bash_parser as _bpar  # noqa: PLC0415
+                if (
+                    not _bdet.detect([_fp_first])
+                    and _fp_first not in _bpar.READ_BINS
+                    and _fp_first not in _bpar.GREP_BINS
+                    and _fp_first not in _bpar.GLOB_BINS
+                    and _fp_first not in _BASH_FAST_PATH_EXCLUDE
+                ):
+                    return CONTINUE()
         # Deferred recovery hint: inject on the first Bash call after compaction
         # if a recovery sidecar exists.  We need a session_id for this so pull
         # it early; if unavailable, fall through without the recovery check.

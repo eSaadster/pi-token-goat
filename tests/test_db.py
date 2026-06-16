@@ -1555,3 +1555,46 @@ def test_global_symbol_kind_query_uses_composite_index(tmp_data_dir):
     assert "idx_symbols_global_name_kind" in plan, (
         f"Expected composite index in global plan, got: {plan!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# get_hook_timing_stats
+# ---------------------------------------------------------------------------
+
+def test_get_hook_timing_stats_empty(tmp_data_dir):
+    """Returns empty dict when no hook:* stats rows exist."""
+    from token_goat.db import get_hook_timing_stats
+    assert get_hook_timing_stats() == {}
+
+
+def test_get_hook_timing_stats_avg_p95_max(tmp_data_dir):
+    """Correct avg/p95/max computed from 10 rows: 10, 20, ..., 100."""
+    from token_goat.db import get_hook_timing_stats
+    for ms in range(10, 110, 10):
+        db.record_stat(None, "hook:pre_read", bytes_saved=ms)
+    stats = get_hook_timing_stats()
+    assert "pre_read" in stats
+    s = stats["pre_read"]
+    assert s["count"] == 10
+    assert s["avg_ms"] == 55   # (10+20+...+100)//10
+    assert s["p95_ms"] == 90   # sorted[int(10*0.95)-1] = sorted[8] = 90
+    assert s["max_ms"] == 100
+
+
+def test_get_hook_timing_stats_multiple_events(tmp_data_dir):
+    """Each distinct hook:* event appears as a separate key."""
+    from token_goat.db import get_hook_timing_stats
+    db.record_stat(None, "hook:pre_read", bytes_saved=50)
+    db.record_stat(None, "hook:post_bash", bytes_saved=120)
+    result = get_hook_timing_stats()
+    assert "pre_read" in result
+    assert "post_bash" in result
+    assert result["pre_read"]["max_ms"] == 50
+    assert result["post_bash"]["max_ms"] == 120
+
+
+def test_get_hook_timing_stats_excludes_non_hook_rows(tmp_data_dir):
+    """Rows with kind not matching 'hook:*' are not included."""
+    from token_goat.db import get_hook_timing_stats
+    db.record_stat(None, "bash_compress:pytest", bytes_saved=999)
+    assert get_hook_timing_stats() == {}

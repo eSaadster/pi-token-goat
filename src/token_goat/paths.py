@@ -53,6 +53,7 @@ __all__ = [
 
 import logging
 import os
+import shlex
 import sys
 import threading
 import time
@@ -152,7 +153,19 @@ def python_runner_command(*subcommand: str) -> str:
     # names with no separators in them.
     if argv:
         argv[0] = argv[0].replace("\\", "/")
-    quoted = [f'"{a}"' if " " in a else a for a in argv]
+    # Quote each arg that needs it. When an arg contains `"`, naive `"..."` wrapping
+    # truncates at the first inner quote (e.g. --cmd 'powershell.exe -Command "schtasks
+    # /Run ..."' becomes --cmd "powershell.exe -Command " with the rest parsed as loose
+    # tokens). Use shlex.quote (POSIX single-quote style) for such args since Claude Code
+    # on Windows runs hook commands through Git Bash.
+    quoted = []
+    for a in argv:
+        if '"' in a:
+            quoted.append(shlex.quote(a))
+        elif " " in a:
+            quoted.append(f'"{a}"')
+        else:
+            quoted.append(a)
     return " ".join(quoted)
 
 
