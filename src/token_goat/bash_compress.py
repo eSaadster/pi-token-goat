@@ -10993,6 +10993,14 @@ _NPM_INST_FUNDING_RE: Final[re.Pattern[str]] = re.compile(
 _NPM_INST_FUND_RUN_RE: Final[re.Pattern[str]] = re.compile(
     r"^\s*run `npm fund`", re.IGNORECASE
 )
+#: General npm WARN (non-deprecated) — keep first 3, collapse the rest
+_NPM_INST_WARN_RE: Final[re.Pattern[str]] = re.compile(r"^npm warn\b", re.IGNORECASE)
+#: npm verbose/debug lines (timing, sill, http, verb) — suppress entirely
+_NPM_INST_VERBOSE_RE: Final[re.Pattern[str]] = re.compile(
+    r"^npm (?:timing|sill|http fetch|http request|http finish|verb)\b", re.IGNORECASE
+)
+#: npm spinner/reify progress lines (braille spinner chars) — suppress
+_NPM_INST_REIFY_RE: Final[re.Pattern[str]] = re.compile(r"^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s")
 #: yarn peer-dependency warning lines — suppress
 _YARN_INST_PEER_DEP_RE: Final[re.Pattern[str]] = re.compile(
     r'^warning ".+ > .+" has (?:unmet|incorrect) peer dependency', re.IGNORECASE
@@ -11092,6 +11100,9 @@ class NpmInstallFilter(Filter):
         kept: list[str] = []
         deprecated_count = 0
         deprecated_suppressed = 0
+        warn_count = 0
+        warn_suppressed = 0
+        verbose_suppressed = 0
 
         for line in lines:
             if _ERROR_SIGNAL_RE.search(line):
@@ -11103,6 +11114,22 @@ class NpmInstallFilter(Filter):
                     kept.append(line)
                 else:
                     deprecated_suppressed += 1
+                continue
+            # General npm WARN (non-deprecated): keep first 3, collapse the rest.
+            if _NPM_INST_WARN_RE.match(line):
+                warn_count += 1
+                if warn_count <= 3:
+                    kept.append(line)
+                else:
+                    warn_suppressed += 1
+                continue
+            # Suppress verbose/debug lines (timing, sill, http, verb).
+            if _NPM_INST_VERBOSE_RE.match(line):
+                verbose_suppressed += 1
+                continue
+            # Suppress spinner/reify progress lines.
+            if _NPM_INST_REIFY_RE.match(line):
+                verbose_suppressed += 1
                 continue
             if _NPM_INST_NOTICE_RE.match(line):
                 if _NPM_INST_NOTICE_LOCKFILE_RE.search(line):
@@ -11122,6 +11149,12 @@ class NpmInstallFilter(Filter):
                 f"suppressed {deprecated_suppressed} additional deprecated"
                 f" warnings (showed first 3 of {deprecated_count})"
             )
+        if warn_suppressed:
+            notes.append(
+                f"suppressed {warn_suppressed} additional npm warn lines"
+                f" (showed first 3 of {warn_count})"
+            )
+        _maybe_note(notes, verbose_suppressed, f"suppressed {verbose_suppressed} verbose/progress lines")
         self._emit_notes(kept, notes)
         return self._finalize(kept)
 
