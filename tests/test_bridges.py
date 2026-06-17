@@ -327,6 +327,33 @@ class TestPluginTsSources:
         assert "[^A-Za-z0-9_-]" in bridges.PI_EXTENSION_TS
         assert "[^A-Za-z0-9._-]" not in bridges.PI_EXTENSION_TS
 
+    def test_pi_ts_registers_status_command(self) -> None:
+        # /token-goat status command must be registered for visibility.
+        assert 'registerCommand("token-goat"' in bridges.PI_EXTENSION_TS
+
+    def test_pi_ts_registers_surgical_read_tools(self) -> None:
+        # pi should be able to proactively call token-goat's surgical reads.
+        for tool in ('"tg_map"', '"tg_symbol"', '"tg_read"', '"tg_find"'):
+            assert tool in bridges.PI_EXTENSION_TS, tool
+        assert "registerTool" in bridges.PI_EXTENSION_TS
+
+    def test_pi_ts_injects_routing_note(self) -> None:
+        # before_agent_start nudges pi to prefer token-goat's tools.
+        assert 'pi.on("before_agent_start"' in bridges.PI_EXTENSION_TS
+        assert "ROUTING_NOTE" in bridges.PI_EXTENSION_TS
+
+    def test_pi_ts_routing_gated_on_availability(self) -> None:
+        # The routing note must not be injected when token-goat is not on PATH.
+        assert "tgAvailable" in bridges.PI_EXTENSION_TS
+
+    def test_pi_ts_sets_status_indicator(self) -> None:
+        # A visible status line confirms the extension is active.
+        assert "setStatus" in bridges.PI_EXTENSION_TS
+
+    def test_pi_ts_imports_typebox(self) -> None:
+        # Tool parameter schemas need typebox.
+        assert 'import { Type } from "typebox"' in bridges.PI_EXTENSION_TS
+
     def test_pi_ts_no_backslash_escapes(self) -> None:
         # The TS is embedded in a plain (non-raw) Python triple-quoted string.
         # Backslashes would risk invalid-escape SyntaxWarnings and corrupted
