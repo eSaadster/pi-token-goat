@@ -310,6 +310,37 @@ python -c "from token_goat import bridges; from pathlib import Path; bridges.ins
 
 This writes `.pi/extensions/token-goat.ts` in the current project only. Remove it by deleting that file.
 
+### Running locally from a virtualenv (no global install)
+
+If you'd rather not install token-goat globally, you can run it from a project-local virtualenv instead. Nothing is written to `~/.claude`, there's no worker autostart, and no global `token-goat` on your PATH — it only exists inside the project's `.venv`. This is handy alongside the project-local pi extension above.
+
+From a clone of the repo:
+
+```bash
+uv venv
+uv pip install -e .              # editable install into ./.venv
+source .venv/bin/activate        # put token-goat on PATH for this shell
+```
+
+Then launch pi from the same shell, so the project-local extension (`.pi/extensions/token-goat.ts`) can find `token-goat` when it shells out:
+
+```bash
+source .venv/bin/activate
+pi
+```
+
+**Heads up on `fastembed`:** on some platforms (e.g. macOS x86_64) `fastembed`/`onnxruntime` has no prebuilt wheel, so the full install fails. token-goat imports them lazily, so you can skip them and everything except semantic search still works:
+
+```bash
+uv venv
+uv pip install -e . --no-deps
+uv pip install typer tree-sitter sqlite-vec Pillow httpx \
+  google-api-python-client google-auth google-auth-oauthlib \
+  psutil networkx tomli-w rich tree-sitter-language-pack
+```
+
+With `fastembed` skipped, `token-goat semantic` / `find` fall back to keyword search; `read`, `symbol`, `map`, bash compression, image shrinking, and the hooks all work normally.
+
 ### Cline, Windsurf, Cursor, Copilot CLI, and other AI tool CLIs
 
 No separate install step needed. Token-goat compresses the terminal output of these tools automatically as soon as they appear on your PATH. Run `token-goat doctor` to confirm they are detected — the "Third-party AI tools" section will show `detected — bash output compression active`.
