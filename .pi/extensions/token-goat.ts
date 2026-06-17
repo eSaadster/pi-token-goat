@@ -82,7 +82,9 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     cwd = ctx.cwd ?? process.cwd();
     const file = ctx.sessionManager?.getSessionFile?.();
-    sessionId = file ? `pi-${file.replace(/[^A-Za-z0-9._-]/g, "_")}` : `pi-${process.pid}`;
+    // token-goat validates session_id against ^[a-zA-Z0-9_-]+$ — no dots, so
+    // map every other char (including the .jsonl dot and path separators) to _.
+    sessionId = file ? `pi-${file.replace(/[^A-Za-z0-9_-]/g, "_")}` : `pi-${process.pid}`;
     callHook("session-start", { session_id: sessionId, cwd });
   });
 

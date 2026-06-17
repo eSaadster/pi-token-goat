@@ -319,6 +319,14 @@ class TestPluginTsSources:
         assert error_pos != -1 and stdout_pos != -1
         assert error_pos < stdout_pos, "r.error check must precede r.stdout access"
 
+    def test_pi_ts_session_id_sanitizer_excludes_dot(self) -> None:
+        # token-goat's session_id validator is ^[a-zA-Z0-9_-]+$ (session.py
+        # _SESSION_ID_RE) — no dots. The extension derives session_id from the
+        # session filename, so its sanitizer must strip dots (e.g. ".jsonl") too,
+        # otherwise every hook call is rejected and the bridge silently no-ops.
+        assert "[^A-Za-z0-9_-]" in bridges.PI_EXTENSION_TS
+        assert "[^A-Za-z0-9._-]" not in bridges.PI_EXTENSION_TS
+
     def test_pi_ts_no_backslash_escapes(self) -> None:
         # The TS is embedded in a plain (non-raw) Python triple-quoted string.
         # Backslashes would risk invalid-escape SyntaxWarnings and corrupted
