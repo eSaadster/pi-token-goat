@@ -1561,10 +1561,17 @@ function _registerIndexCommands(app: Command): void {
       }) => {
         const m = await _cliIndex();
         // commander collects repeated --ext as an array when .argParser pushes; a
-        // single pass arrives as a string — normalise to string[] | null.
+        // single pass arrives as a string — normalise to string[] | null. The
+        // option defaults to [] (needed for the .concat collector), so an empty
+        // array means "--ext not given" and must become null, NOT an empty
+        // filter. In JS [] is truthy, so without this an empty filter reaches
+        // iter_source_files and rejects every file (Python's empty tuple is
+        // falsy, so the original collapsed to None here).
         const extRaw = opts.ext;
         const ext: string[] | null = Array.isArray(extRaw)
-          ? extRaw
+          ? extRaw.length > 0
+            ? extRaw
+            : null
           : extRaw
             ? [extRaw]
             : null;

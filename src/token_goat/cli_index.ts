@@ -390,9 +390,13 @@ export async function index_cmd(args: {
     }
   };
 
-  const extFilter: Set<string> | null = ext
-    ? new Set(ext.map((e) => (e.startsWith(".") ? e : `.${e}`).toLowerCase()))
-    : null;
+  // An empty (or absent) ext list means "no extension filter" — mirror Python's
+  // `set(ext) if ext else None`. Guard on length so an empty array (truthy in
+  // JS) never produces an empty Set that rejects every file in iter_source_files.
+  const extFilter: Set<string> | null =
+    ext && ext.length > 0
+      ? new Set(ext.map((e) => (e.startsWith(".") ? e : `.${e}`).toLowerCase()))
+      : null;
 
   _LOG.info("index start: project=%s mode=%s", path.basename(project.root), full ? "full" : "incremental");
   let summary: parser.IndexProjectResult;
