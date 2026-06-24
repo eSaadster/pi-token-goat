@@ -1,0 +1,41 @@
+{
+  "nextId": 4,
+  "tasks": [
+    {
+      "id": "1",
+      "subject": "Init TS repo and push as master branch to remote",
+      "description": "Initialize the ts directory as a git repo, add remote, and push as a new branch called 'master'",
+      "status": "in_progress",
+      "activeForm": "Initializing TS repo and pushing to remote",
+      "metadata": {},
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1782263429882,
+      "updatedAt": 1782263434654
+    },
+    {
+      "id": "2",
+      "subject": "Rename remote main branch to python and make master the new main",
+      "description": "On the remote, rename main to python, then rename master to main",
+      "status": "pending",
+      "activeForm": "Renaming branches on remote",
+      "metadata": {},
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1782263429884,
+      "updatedAt": 1782263429884
+    },
+    {
+      "id": "3",
+      "subject": "Rewrite README with TS port explanation",
+      "description": "Write a comprehensive README explaining why the TypeScript port exists, how it works, architecture, and comparison with the Python fork",
+      "status": "pending",
+      "activeForm": "Rewriting README",
+      "metadata": {},
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1782263429884,
+      "updatedAt": 1782263429884
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# Build / dependency / scratch output — never committed.
+node_modules/
+dist/
+.tmp-claude/
+*.tsbuildinfo
+
+# Stray agent scratch artifacts
+.grep_out.txt
+.bm_*.txt

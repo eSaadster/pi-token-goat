@@ -1,0 +1,134 @@
+/**
+ * TOML extractor — emits one Section per `[table]` / `[[array]]` header.
+ *
+ * Faithful port of src/token_goat/languages/toml_idx.py. Strict NodeNext ESM.
+ *
+ * Why a custom scanner rather than `tomllib`:
+ *
+ * * `tomllib.loads` parses TOML into a plain dict and discards source positions.
+ *   We need start/end line numbers so `token-goat section` can slice the source
+ *   file back out.
+ *
+ * * The TOML grammar for table headers is unambiguous and easy to recognise
+ *   line-by-line: `[name]` or `[[name]]` at column 0, with the table spanning
+ *   every line until the next header (or EOF). A regex scan over the lines
+ *   gives correct results without depending on a third-party tree-sitter
+ *   grammar.
+ *
+ * Section model
+ * -------------
+ * * `heading`: the dotted key inside the brackets, e.g. `tool.ruff`.
+ * * `level`: 1 for `[name]` tables, 2 for `[[array]]` array-of-tables entries.
+ *   This is purely a convenience for downstream sorting; both flavours are
+ *   addressable via the same `token-goat section file.toml::name` lookup.
+ * * `line`: 1-based line of the header.
+ * * `end_line`: 1-based last line of the section's content (header inclusive),
+ *   which is the line immediately before the next header or the file's last
+ *   line for the final section.
+ *
+ * Symbols
+ * -------
+ * We also emit one `toml_key` symbol per table header so `token-goat symbol
+ * ruff` can locate the relevant table in any indexed config file across the
+ * repo. Within-table keys (e.g. `line-length = 100`) are not indexed
+ * individually — the section payload from a small surgical read already exposes
+ * them, and indexing every leaf would bloat the symbol table for what is
+ * typically a small file.
+ */
+
+import { ImpExp, Ref, Section, Symbol } from "../parser.js";
+import { getLogger } from "../util.js";
+import { scan_flat_headers } from "./common.js";
+
+export const __all__ = ["extract"] as const;
+
+const _LOG = getLogger("languages.toml_idx");
+
+// Maximum table-header line value persisted as `end_line` for the last section
+// in a file. Pegged at the actual EOF line — TOML files do not have nested
+// headers, so the last header runs to the bottom.
+const _MAX_HEADING_LEN = 200;
+const _MAX_SYMBOLS_PER_FILE = 500;
+
+// Strict TOML table-header regex — combined bare-or-quoted form. Combined into
+// one pattern so `common.scan_flat_headers` can walk each candidate line exactly
+// once.
+//
+// Both forms share:
+//   * Column-0 anchor — no leading whitespace (per the TOML spec).
+//   * Trailing comment after the closing bracket is tolerated.
+// Form differences:
+//   * Bare key (`[tool.ruff]`): standard bare-key character class plus dots,
+//     hyphens, and underscores (all spec-allowed).
+//   * Quoted key (`["tool.ruff"]`): bracket content can contain characters
+//     (dots, slashes) that would otherwise be path separators in a bare key.
+//
+// Combined bare-or-quoted TOML table-header regex. We match both forms in a
+// single alternation so `common.scan_flat_headers` only walks the file once.
+// Named groups `open` / `close` capture the brackets so we can detect a
+// mismatch (`[[name]` or `[name]]`); `bare` and `quoted` capture the heading
+// text, exactly one of which is non-empty per successful match.
+//
+// Python: re.compile(
+//   r"^(?P<open>\[\[?)\s*"
+//   r"(?:(?P<bare>[A-Za-z0-9_\-][A-Za-z0-9_\-.]*)"
+//   r"|\"(?P<quoted>[^\"\n]+)\")"
+//   r"\s*(?P<close>\]\]?)\s*(?:#.*)?$"
+// )
+const _TABLE_RE =
+  /^(?<open>\[\[?)\s*(?:(?<bare>[A-Za-z0-9_\-][A-Za-z0-9_\-.]*)|"(?<quoted>[^"\n]+)")\s*(?<close>\]\]?)\s*(?:#.*)?$/;
+
+/**
+ * Return the table heading from a `_TABLE_RE` match, or "" to skip.
+ *
+ * Rejects mismatched bracket pairs (`[[name]` / `[name]]`) by returning the
+ * empty string — `common.scan_flat_headers` treats empty headings as a skip
+ * signal so the malformed line is silently dropped.
+ */
+function _toml_get_name(m: RegExpMatchArray): string {
+  const groups = m.groups ?? {};
+  const open = (groups.open ?? "");
+  const close = (groups.close ?? "");
+  if (open.length !== close.length) {
+    return "";
+  }
+  const bare = groups.bare ?? "";
+  const quoted = groups.quoted ?? "";
+  return (bare || quoted || "").trim();
+}
+
+/**
+ * Extract table headers from a TOML file as `Section` entries.
+ *
+ * Always returns four lists (symbols, refs, imports, sections); refs and
+ * imports are empty for TOML — there is no cross-file reference model.
+ *
+ * Tolerant of malformed input: lines that do not match a header pattern are
+ * simply not emitted. A file with no table headers at all produces an empty
+ * result, which is the correct behaviour — there is nothing to index.
+ */
+export function extract(
+  source: Buffer,
+  _rel_path: string,
+): [Symbol[], Ref[], ImpExp[], Section[]] {
+  const result = scan_flat_headers(source, _LOG, "toml_idx", {
+    pattern: _TABLE_RE,
+    get_name: _toml_get_name,
+    symbol_kind: "toml_key",
+    max_entries: _MAX_SYMBOLS_PER_FILE,
+    max_heading_len: _MAX_HEADING_LEN,
+    // `[[` -> level 2 (array-of-tables); `[` -> level 1 (table).
+    level_from_match: (m: RegExpMatchArray): number => {
+      const open = (m.groups ?? {}).open ?? "";
+      return open === "[[" ? 2 : 1;
+    },
+    // Headers must start at column 0; the prefilter skips the regex cost on
+    // every non-header line (the vast majority of a real TOML file).
+    prefilter: (c: string): boolean => c.startsWith("["),
+  });
+  if (result === null) {
+    return [[], [], [], []];
+  }
+  const [symbols, sections] = result;
+  return [symbols, [], [], sections];
+}
